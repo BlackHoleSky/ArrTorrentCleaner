@@ -44,7 +44,7 @@ func NewConfigFromFile(file string) Config {
 
 	configFile, err := ioutil.ReadFile(file)
 	if os.IsNotExist(err) {
-		fmt.Println("no config found using defaults")
+		fmt.Println("No config found, using defaults.")
 		return config
 	} else {
 		err = json.Unmarshal(configFile, &configFileStruct)
@@ -58,10 +58,10 @@ func NewConfigFromFile(file string) Config {
 				config.WaitTime = WaitTime
 			} else {
 				log.Println(err)
-				log.Printf("Waittime set incorrectly in config using default, (%s) is incorrect", configFileStruct.WaitTime)
+				log.Printf("Waittime set incorrectly in config, using default - (%s) is incorrect.", configFileStruct.WaitTime)
 			}
 		} else {
-			log.Println("Waittime not set in config using default")
+			log.Println("Waittime not set in config, using default.")
 		}
 		if configFileStruct.ZeroPercentTimeout != "" {
 			ZeroPercentTimeout, err := time.ParseDuration(configFileStruct.ZeroPercentTimeout)
@@ -69,20 +69,20 @@ func NewConfigFromFile(file string) Config {
 				config.ZeroPercentTimeout = ZeroPercentTimeout
 			} else {
 				log.Println(err)
-				log.Printf("ZeroPercentTimeout set incorrectly in config using default, (%s) is incorrect", configFileStruct.ZeroPercentTimeout)
+				log.Printf("ZeroPercentTimeout set incorrectly in config, using default - (%s) is incorrect.", configFileStruct.ZeroPercentTimeout)
 			}
 		} else {
-			log.Println("ZeroPercentTimeout not set in config using default")
+			log.Println("ZeroPercentTimeout not set in config, using default.")
 		}
 		if configFileStruct.SonarrURL != "" {
 			config.SonarrURL = configFileStruct.SonarrURL
 		} else {
-			log.Println("SonarrURL not set in config using default")
+			log.Println("SonarrURL not set in config, using default.")
 		}
 		if configFileStruct.SonarrAPIKey != "" {
 			config.SonarrAPIKey = configFileStruct.SonarrAPIKey
 		} else {
-			log.Println("SonarrAPIKey not set in config using default")
+			log.Println("SonarrAPIKey not set in config, using default.")
 		}
 		config.Blacklist = configFileStruct.Blacklist
 	}
@@ -91,34 +91,34 @@ func NewConfigFromFile(file string) Config {
 }
 
 func main() {
-	f, err := os.OpenFile("TorrentCleaner.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("SonarrTorrentCleaner.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		log.Fatalf("Error opening file: %v.", err)
 	}
 	defer f.Close()
 	log.SetOutput(f)
-	log.Println("Starting Torrent Cleaner....")
-	log.Printf("Time Is : %v", time.Now())
-	config = NewConfigFromFile("config.json")
+	log.Println("Starting Sonarr Torrent Cleaner....")
+	log.Printf("Time Is: %v.", time.Now())
+	config = NewConfigFromFile("sonarr-cleaner-config.json")
 
-	file, err := ioutil.ReadFile("old_queue.json")
+	file, err := ioutil.ReadFile("sonarr_queue.json")
 	if os.IsNotExist(err) {
-		log.Println("No previous queue file found")
+		log.Println("No previous Sonarr queue file found.")
 		queue, err := GetCurrentQueue()
 		if err != nil {
-			log.Fatalln("Error getting Sonarr Queue")
+			log.Fatalln("Error getting Sonarr Queue.")
 			log.Fatalln(err.Error())
 			os.Exit(1)
 		} else {
-			log.Println("Got queue from Sonarr, saving to file...")
+			log.Println("Pulled the queue from Sonarr, updating local file...")
 			queueJSON, _ := json.Marshal(queue)
-			err = ioutil.WriteFile("old_queue.json", queueJSON, 0644)
+			err = ioutil.WriteFile("sonarr_queue.json", queueJSON, 0644)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
 		}
 	} else {
-		log.Printf("Got old queue, looking for torrents over %v old", config.WaitTime)
+		log.Printf("Got old queue, looking for torrents over %v old...", config.WaitTime)
 		currentQueue, err := GetCurrentQueue()
 		if err != nil {
 			log.Fatal(err)
@@ -141,24 +141,24 @@ func main() {
 						timeSinceLastSeen := currentTime.Sub(oldQueueObject.LastSeen)
 						if timeSinceLastSeen > config.WaitTime {
 							if oldQueueObject.Queue.Sizeleft == queueItem.Queue.Sizeleft {
-								log.Printf("Remove %s-%v:%v", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
+								log.Printf("Removing - %s-%v:%v, for lack of activity.", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
 								removeFromSonarr(oldQueue, currentQueue, oldQueueObject)
 								if err != nil {
 									log.Fatalf(err.Error())
 								}
 							} else {
 								//Torrent has progressed bump it's last time
-								log.Printf("Progress made on %s-%v:%v bumping last time", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
+								log.Printf("Resetting timers - %s-%v:%v, Progress made.", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
 								oldQueue.QueueContainers[i].LastSeen = currentTime
 							}
 						} else if timeSinceLastSeen > config.ZeroPercentTimeout && queueItem.Queue.Size == queueItem.Queue.Sizeleft {
-							log.Printf("0%% progress made on %s-%v:%v in %s, removing", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber,config.ZeroPercentTimeout)
+							log.Printf("Removing -  %s-%v:%v, 0%% progress made in the last %s.", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber,config.ZeroPercentTimeout)
 							err = removeFromSonarr(oldQueue, currentQueue, oldQueueObject)
 							if err != nil {
 								log.Fatalf(err.Error())
 							}
 						} else {
-							log.Printf("%s-%v:%v Lower than timeout, skipping", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
+							log.Printf("Skipping - %s-%v:%v, timers not yet reached.", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
 						}
 					}
 				} else {
@@ -166,9 +166,9 @@ func main() {
 				}
 			}
 		}
-		log.Println("Queue file updated, saving to file...")
+		log.Println("Queue file updated, saving...")
 		queueJSON, _ := json.Marshal(oldQueue)
-		err = ioutil.WriteFile("old_queue.json", queueJSON, 0644)
+		err = ioutil.WriteFile("sonarr_queue.json", queueJSON, 0644)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
@@ -190,12 +190,12 @@ func removeFromSonarr(oldQueue SonarrQueue, currentQueue SonarrQueue, oldQueueOb
 		return err
 	}
 	if resp.StatusCode < 300 {
-		log.Printf("Removed %s-%v:%v from sonarr", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
+		log.Printf("Removed %s-%v:%v from sonarr.", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber)
 		err, oldQueue.QueueContainers = removeByID(oldQueue.QueueContainers, oldQueueObject.Queue.ID)
 		err, currentQueue.QueueContainers = removeByID(currentQueue.QueueContainers, oldQueueObject.Queue.ID)
 	} else {
 		log.Fatalf("Error removing %s-%v:%v from sonarr! %+v", oldQueueObject.Queue.Series.Title, oldQueueObject.Queue.Episode.SeasonNumber, oldQueueObject.Queue.Episode.EpisodeNumber, resp)
-		return errors.New("Error removing episode from Sonarr")
+		return errors.New("Error removing episode from Sonarr!")
 	}
 	return nil
 }
@@ -206,7 +206,7 @@ func removeByID(list []QueueObjectContainer, ID int) (error, []QueueObjectContai
 			return nil, append(list[:i], list[i+1:]...)
 		}
 	}
-	return errors.New("Not Found"), list
+	return errors.New("Not Found."), list
 }
 
 func containsID(list []QueueObjectContainer, ID int) (error, QueueObjectContainer) {
@@ -215,7 +215,7 @@ func containsID(list []QueueObjectContainer, ID int) (error, QueueObjectContaine
 			return nil, a
 		}
 	}
-	return errors.New("Not Found"), QueueObjectContainer{}
+	return errors.New("Not Found."), QueueObjectContainer{}
 }
 
 func GetCurrentQueue() (SonarrQueue, error) {
